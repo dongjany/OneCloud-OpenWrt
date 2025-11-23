@@ -13,7 +13,6 @@ env:
   GEN_BURN_IMG_SH: gen_burn_img.sh
   UPLOAD_FIRMWARE: true
   UPLOAD_RELEASE: true
-  TMATE_DEBUG: true
   TZ: Asia/Shanghai
 
 jobs:
@@ -77,16 +76,10 @@ jobs:
         $GITHUB_WORKSPACE/$DIY_P2_SH
 
     - name: 启用 tmate 调试
-      if: env.TMATE_DEBUG == 'true'
       uses: mxschmitt/action-tmate@v3
       with:
-        timeout-minutes: ${{ env.TMATE_TIMEOUT / 60 }}
-        enable-ssh-password: true
-    steps:
-    if: env.TMATE_DEBUG == 'true'
-    - name: Setup tmate session
-    - uses: actions/checkout@v4
-      uses: mxschmitt/action-tmate@v3
+        limit-access-to-actor: true  # 仅允许触发者访问（基于GitHub SSH公钥）
+        timeout-minutes: 30
 
     - name: Download package
       id: package
