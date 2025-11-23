@@ -26,11 +26,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    
-      run: |
-        cd openwrt
-        echo "添加 Amlogic S805 平台支持..."
-        git clone --depth 1 -b 6.6 https://github.com/shiyu1314/s805
 
     - name: Get Commit Hash
       id: getHash
