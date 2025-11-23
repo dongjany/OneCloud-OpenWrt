@@ -111,77 +111,40 @@ jobs:
       if: (!cancelled())
       run: df -hT
 
-    - name: Organize files (burn firmware + merged packages)
-  id: organize
-  if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
-  run: |
-    OPENWRT_BIN_DIR="openwrt/bin"
-    TARGET_DEVICE_DIR=$(find "$OPENWRT_BIN_DIR/targets" -maxdepth 2 -type d | head -n 1)
-    if [ -z "$TARGET_DEVICE_DIR" ]; then
-      echo "❌ 未找到固件目录 openwrt/bin/targets/*/*"
-      exit 1
-    fi
-    cd "$TARGET_DEVICE_DIR" || exit 1 
-    mkdir -p target_firmware
-    shopt -s nocaseglob 
-    mv *burn* target_firmware/ 2>/dev/null || true
-    shopt -u nocaseglob
-    rm -rf *.bin *.img *.tar.gz *.tar.xz *.img.gz *.bin.xz 2>/dev/null || true
-    mv target_firmware/* . || true
-    rm -rf target_firmware
-    MERGED_PACKAGES_DIR="$TARGET_DEVICE_DIR/packages"
-    mkdir -p "$MERGED_PACKAGES_DIR"  
-    DEVICE_PACKAGES_DIR="$TARGET_DEVICE_DIR/packages_original"  
-    if [ -d "$TARGET_DEVICE_DIR/packages" ]; then
-      mv "$TARGET_DEVICE_DIR/packages" "$DEVICE_PACKAGES_DIR"  
-      cp -r "$DEVICE_PACKAGES_DIR"/* "$MERGED_PACKAGES_DIR/"  
-      rm -rf "$DEVICE_PACKAGES_DIR"  
-    fi
-    GLOBAL_PACKAGES_DIR="$OPENWRT_BIN_DIR/packages"
-    if [ -d "$GLOBAL_PACKAGES_DIR" ]; then
-      cp -r "$GLOBAL_PACKAGES_DIR"/* "$MERGED_PACKAGES_DIR/"
-    fi
-    rm -rf "$MERGED_PACKAGES_DIR"/{feeds.buildinfo,version.buildinfo,sha256sums,*.sha,*.manifest,profiles.json} 2>/dev/null || true
-    rm -rf feeds.buildinfo version.buildinfo sha256sums profiles.json *.sha *.manifest 2>/dev/null || true
-    echo "FIRMWARE=$TARGET_DEVICE_DIR" >> $GITHUB_ENV
-    echo "status=success" >> $GITHUB_OUTPUT
+    - name: Organize files
+      id: organize
+      if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
+      run: |
+        cd openwrt/bin/targets/*/*
+        rm -rf packages feeds.buildinfo version.buildinfo sha256sums profiles.json *.sha *.manifest
+        echo "FIRMWARE=$PWD" >> $GITHUB_ENV
+        echo "status=success" >> $GITHUB_OUTPUT
 
-- name: Upload burn firmware + all packages (merged)
-  uses: actions/upload-artifact@main
-  if: steps.organize.outputs.status == 'success' && !cancelled()
-  with:
-    name: OpenWrt_firmware${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}_burn+packages
-    path: |
-      ${{ env.FIRMWARE }}/*burn*  
-      ${{ env.FIRMWARE }}/packages/  
-    if-no-files-found: warn  
-    
-- name: Generate release tag
-  id: tag
-  if: env.UPLOAD_RELEASE == 'true' && !cancelled()
-  run: |
-    echo "release_tag=$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_OUTPUT
-    touch release.txt
-    [ "${UPLOAD_GOFILE}" = true && -n "${{ steps.gofile.outputs.url }}" ] && echo "🔗 [GoFile](${{ steps.gofile.outputs.url }})" >> release.txt
-    # 说明合并后的结构
-    echo -e "\n📦 包含内容：" >> release.txt
-    echo -e "- 带「burn」关键词的刷机固件（支持大小写匹配）" >> release.txt
-    echo -e "- 所有软件包：统一在 packages 目录中（合并设备专属包 + 全局通用包）" >> release.txt
-    echo "status=success" >> $GITHUB_OUTPUT
+    - name: Upload firmware directory
+      uses: actions/upload-artifact@main
+      if: steps.organize.outputs.status == 'success' && !cancelled()
+      with:
+        name: OpenWrt_firmware${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
+        path: ${{ env.FIRMWARE }}
 
-- name: Upload to GitHub Release
-  uses: softprops/action-gh-release@v2.1.0
-  if: steps.tag.outputs.status == 'success' && !cancelled()
-  env:
-    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  with:
-    tag_name: ${{ steps.tag.outputs.release_tag }}
-    body_path: release.txt
-    files: |
-      ${{ env.FIRMWARE }}/*burn*  
-      ${{ env.FIRMWARE }}/packages/**/*  
-    draft: false
-    prerelease: false
+    - name: Generate release tag
+      id: tag
+      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
+      run: |
+        echo "release_tag=$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_OUTPUT
+        touch release.txt
+        [ ${UPLOAD_GOFILE} = true && ${{ steps.gofile.outputs.url }} ] && echo "🔗 [GoFile](${{ steps.gofile.outputs.url }})" >> release.txt
+        echo "status=success" >> $GITHUB_OUTPUT
+
+    - name: Upload firmware to release
+      uses: softprops/action-gh-release@v2.1.0
+      if: steps.tag.outputs.status == 'success' && !cancelled()
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.tag.outputs.release_tag }}
+        body_path: release.txt
+        files: ${{ env.FIRMWARE }}/*
 
     - name: Delete workflow runs
       uses: Mattraks/delete-workflow-runs@main
