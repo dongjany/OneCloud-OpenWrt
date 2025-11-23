@@ -82,6 +82,11 @@ jobs:
       with:
         timeout-minutes: ${{ env.TMATE_TIMEOUT / 60 }}
         enable-ssh-password: true
+    steps:
+    if: env.TMATE_DEBUG == 'true'
+    - name: Setup tmate session
+    - uses: actions/checkout@v4
+      uses: mxschmitt/action-tmate@v3
 
     - name: Download package
       id: package
